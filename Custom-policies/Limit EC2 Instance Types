@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LimitEC2InstanceTypes",
+      "Effect": "Deny",
+      "Action": "ec2:RunInstances",
+      "Resource": "*",
+      "Condition": {
+        "StringNotLikeIfExists": {
+          "ec2:InstanceType": [
+            "t3.*",
+            "m5.*"
+          ]
+        }
+      }
+    }
+  ]
+}
