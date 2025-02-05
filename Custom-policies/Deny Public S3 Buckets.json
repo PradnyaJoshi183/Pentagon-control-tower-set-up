@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyPublicS3Buckets",
+      "Effect": "Deny",
+      "Action": [
+        "s3:PutBucketAcl",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalOrgPaths": [
+            "/ou/o-xxxxxxxxxx/ou-xxxxxxxxxx-Dev/",
+            "/ou/o-xxxxxxxxxx/ou-xxxxxxxxxx-UAT/",
+            "/ou/o-xxxxxxxxxx/ou-xxxxxxxxxx-Prod/"
+          ]
+        }
+      }
+    }
+  ]
+}
