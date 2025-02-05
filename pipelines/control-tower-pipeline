@@ -2,6 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: "CI/CD Pipeline for deploying SCPs via AWS CodePipeline"
 
 Resources:
+  # CodePipeline definition
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -11,6 +12,7 @@ Resources:
         Type: S3
         Location: !Ref ArtifactBucket
       Stages:
+        # Source Stage from GitHub
         - Name: Source
           Actions:
             - Name: GitHubSource
@@ -20,12 +22,14 @@ Resources:
                 Provider: GitHub
                 Version: 1
               Configuration:
-                Owner: "YourGitHubOrg"
-                Repo: "aws-landing-zone"
-                Branch: "main"
-                OAuthToken: "{{resolve:secretsmanager:GitHubToken}}"
+                Owner: "YourGitHubOrg"  # Replace with your GitHub organization
+                Repo: "aws-landing-zone"  # Replace with your repository name
+                Branch: "main"  # Replace with your desired branch name
+                OAuthToken: "{{resolve:secretsmanager:GitHubToken}}"  # Use Secrets Manager for GitHub Token
               OutputArtifacts:
                 - Name: SourceArtifact
+        
+        # Build Stage to validate SCP content using CodeBuild
         - Name: Build
           Actions:
             - Name: ValidateSCP
@@ -40,6 +44,8 @@ Resources:
                 ProjectName: !Ref CodeBuildProject
               OutputArtifacts:
                 - Name: BuildArtifact
+        
+        # Deploy Stage to apply the SCP using CloudFormation
         - Name: Deploy
           Actions:
             - Name: DeploySCPs
@@ -50,15 +56,17 @@ Resources:
                 Version: 1
               Configuration:
                 ActionMode: CREATE_UPDATE
-                StackName: "SCPDeploymentStack"
-                TemplatePath: BuildArtifact::scp-deployment.yaml
+                StackName: "SCPDeploymentStack"  # Replace with your desired stack name
+                TemplatePath: BuildArtifact::scp-deployment.yaml  # Path to the CloudFormation template in the BuildArtifact
                 Capabilities: CAPABILITY_NAMED_IAM
               InputArtifacts:
                 - Name: BuildArtifact
 
+  # S3 Bucket for Artifact Store
   ArtifactBucket:
     Type: AWS::S3::Bucket
 
+  # IAM Role for CodePipeline
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -69,7 +77,23 @@ Resources:
             Principal:
               Service: [codepipeline.amazonaws.com]
             Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                  - cloudformation:DescribeStacks
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                Resource: "*"
 
+  # CodeBuild Project for SCP Validation
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -81,7 +105,11 @@ Resources:
         Image: "aws/codebuild/standard:5.0"
         Type: LINUX_CONTAINER
       ServiceRole: !Ref CodeBuildRole
+      Artifacts:
+        Type: CODEPIPELINE
+        Name: BuildArtifact  # This will output to CodePipeline
 
+  # IAM Role for CodeBuild
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -92,3 +120,18 @@ Resources:
             Principal:
               Service: [codebuild.amazonaws.com]
             Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - organizations:DescribePolicy
+                  - organizations:ListPolicies
+                  - organizations:AttachPolicy
+                  - organizations:CreatePolicy
+                  - organizations:UpdatePolicy
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeChangeSet
+                Resource: "*"
