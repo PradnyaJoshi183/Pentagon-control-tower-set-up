@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation template to set up AWS Control Tower Landing Zone with custom SCPs"
+
+Parameters:
+  SCPBucketName:
+    Type: String
+    Description: "S3 Bucket storing SCP policies"
+
+Resources:
+  DevOU:
+    Type: AWS::Organizations::OrganizationalUnit
+    Properties:
+      Name: "Dev"
+      ParentId: "r-xxxxxxxxxx" # Replace with Root ID
+
+  UatOU:
+    Type: AWS::Organizations::OrganizationalUnit
+    Properties:
+      Name: "UAT"
+      ParentId: "r-xxxxxxxxxx" # Replace with Root ID
+
+  ProdOU:
+    Type: AWS::Organizations::OrganizationalUnit
+    Properties:
+      Name: "Prod"
+      ParentId: "r-xxxxxxxxxx" # Replace with Root ID
+
+  SCPCustomGuardrails:
+    Type: AWS::Organizations::Policy
+    Properties:
+      Name: "Custom-SCP"
+      Description: "Custom SCP for governance"
+      Type: "SERVICE_CONTROL_POLICY"
+      Content: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Action": ["iam:CreateAccessKey", "iam:DeleteAccessKey"],
+              "Resource": "*"
+            }
+          ]
+        }
+      TargetIds:
+        - !Ref DevOU
+        - !Ref UatOU
+        - !Ref ProdOU
+
+  SCPRestrictRootAccount:
+    Type: AWS::Organizations::Policy
+    Properties:
+      Name: "RestrictRootAccount"
+      Description: "Prevents actions using the root account."
+      Type: "SERVICE_CONTROL_POLICY"
+      Content: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Action": "*",
+              "Resource": "*",
+              "Condition": {
+                "StringLike": {
+                  "aws:PrincipalArn": "arn:aws:iam::*:root"
+                }
+              }
+            }
+          ]
+        }
+      TargetIds:
+        - !Ref DevOU
+        - !Ref UatOU
+        - !Ref ProdOU
+
+  SCPEnforceS3Encryption:
+    Type: AWS::Organizations::Policy
+    Properties:
+      Name: "EnforceS3Encryption"
+      Description: "Ensures all S3 buckets are encrypted."
+      Type: "SERVICE_CONTROL_POLICY"
+      Content: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Action": "s3:PutBucketPolicy",
+              "Resource": "*",
+              "Condition": {
+                "StringNotEqualsIfExists": {
+                  "s3:x-amz-server-side-encryption": ["AES256", "aws:kms"]
+                }
+              }
+            }
+          ]
+        }
+      TargetIds:
+        - !Ref DevOU
+        - !Ref UatOU
+        - !Ref ProdOU
+
+  SCPRestrictPublicRDS:
+    Type: AWS::Organizations::Policy
+    Properties:
+      Name: "RestrictPublicRDS"
+      Description: "Prevents public access to RDS instances."
+      Type: "SERVICE_CONTROL_POLICY"
+      Content: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Action": "rds:ModifyDBInstance",
+              "Resource": "*",
+              "Condition": {
+                "Bool": {
+                  "rds:PubliclyAccessible": "true"
+                }
+              }
+            }
+          ]
+        }
+      TargetIds:
+        - !Ref DevOU
+        - !Ref UatOU
+        - !Ref ProdOU
